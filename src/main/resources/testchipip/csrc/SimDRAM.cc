@@ -1,15 +1,22 @@
 #include <vpi_user.h>
 #include <svdpi.h>
 #include <stdint.h>
+#include <cstdlib>
+#include <cstring>
 #include <cassert>
 #include <sys/mman.h>
 #include <fesvr/memif.h>
 #include <fesvr/elfloader.h>
 
 #include "mm_dramsim2.h"
+#include "mm_ramulator2.h"
 
 bool use_dramsim = false;
+bool use_ramulator2 = false;
+
 std::string ini_dir = "dramsim2_ini";
+std::string ramulator2_config = "";
+
 std::string loadmem_file = "";
 std::vector<std::map<long long int, backing_data_t>> backing_mem_data = {};
 
@@ -46,8 +53,13 @@ extern "C" void *memory_init(
 
       if (arg == "+dramsim")
         use_dramsim = true;
+      if (arg == "+ramulator2")
+        use_ramulator2 = true;
+
       if (arg.find("+dramsim_ini_dir=") == 0)
         ini_dir = arg.substr(strlen("+dramsim_ini_dir="));
+      if (arg.find("+ramulator2_config=") == 0)
+        ramulator2_config = arg.substr(strlen("+ramulator2_config="));
       if (arg.find("+loadmem=") == 0)
         loadmem_file = arg.substr(strlen("+loadmem="));
     }
@@ -84,19 +96,21 @@ extern "C" void *memory_init(
         load_elf(loadmem_file.c_str(), &loadmem_memif, &entry, 0);
       }
 
-      backing_mem_data[chip_id][mem_base] = {data, mem_size};
+      backing_mem_data[chip_id][mem_base] = {data, static_cast<size_t>(mem_size)};
     }
-
-    if (use_dramsim)
+    
+    if (use_ramulator2) {
+      assert(ramulator2_config != "");
+      mm = (mm_t *) (new mm_ramulator2_t(mem_base, mem_size, word_size, line_size, backing_mem_data[chip_id][mem_base], ramulator2_config, 1 << id_bits, clock_hz));
+    } else if (use_dramsim) {
       mm = (mm_t *) (new mm_dramsim2_t(mem_base, mem_size, word_size, line_size,
                                        backing_mem_data[chip_id][mem_base],
                                        memory_ini, system_ini, ini_dir,
                                        1 << id_bits, clock_hz));
-    else
+      } else {
       mm = (mm_t *) (new mm_magic_t(mem_base, mem_size, word_size, line_size,
                                     backing_mem_data[chip_id][mem_base]));
-
-
+      }
     return mm;
 }
 
