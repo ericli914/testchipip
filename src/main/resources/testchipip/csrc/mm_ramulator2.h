@@ -96,6 +96,7 @@ class mm_ramulator2_t : public mm_t
 
   bool store_inflight = false;
   uint64_t store_addr;
+  uint64_t store_base_addr;
   uint64_t store_id;
   uint64_t store_size;
   uint64_t store_count;

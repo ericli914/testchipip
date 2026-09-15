@@ -100,6 +100,8 @@ extern "C" void *memory_init(
     }
     
     if (use_ramulator2) {
+      printf("[SimDRAM] Using Ramulator2 config: %s\n", ramulator2_config.c_str());
+      fflush(stdout);
       assert(ramulator2_config != "");
       mm = (mm_t *) (new mm_ramulator2_t(mem_base, mem_size, word_size, line_size, backing_mem_data[chip_id][mem_base], ramulator2_config, 1 << id_bits, clock_hz));
     } else if (use_dramsim) {

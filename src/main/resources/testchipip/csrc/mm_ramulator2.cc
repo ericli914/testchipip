@@ -14,8 +14,16 @@
 
 //using namespace Ramulator;
 
+static uint64_t dbg_read_sent = 0;
+static uint64_t dbg_read_done = 0;
+static uint64_t dbg_write_sent = 0;
+static uint64_t dbg_write_done = 0;
+static uint64_t dbg_read_reject = 0;
+static uint64_t dbg_write_reject = 0;
+
 void mm_ramulator2_t::read_complete(uint64_t address)
 {
+  dbg_read_done++;
   assert(!rreq[address].empty());
   auto req = rreq[address].front();
   uint64_t start_addr = (req.addr / word_size) * word_size;
@@ -29,6 +37,7 @@ void mm_ramulator2_t::read_complete(uint64_t address)
 
 void mm_ramulator2_t::write_complete(uint64_t address)
 {
+  dbg_write_done++;
   assert(!wreq[address].empty());
   auto b_id = wreq[address].front();
   bresp.push(b_id);
@@ -40,7 +49,6 @@ void mm_ramulator2_t::write_complete(uint64_t address)
 {
     //fprintf(stderr, "power callback: %0.3f, %0.3f, %0.3f, %0.3f\n",a,b,c,d);
 }*/
-
 
 mm_ramulator2_t::mm_ramulator2_t(
     size_t mem_base,
@@ -124,11 +132,21 @@ void mm_ramulator2_t::tick(
       auto transaction = *it;
       uint64_t addr = transaction.addr;
 
-      bool accepted = ramulator2_frontend->receive_external_requests(0, addr, transaction.id, [this, addr](Ramulator::Request& req) {read_complete(addr);});
+      bool accepted = ramulator2_frontend->receive_external_requests(
+          0,
+          addr,
+          transaction.id,
+          [this, addr](Ramulator::Request& req) {
+            read_complete(addr);
+          });
+
       if (accepted) {
-      read_id_busy[transaction.id] = true;
-      rreq[addr].push(transaction);
-      rreq_queue.erase(it);
+        dbg_read_sent++;
+        read_id_busy[transaction.id] = true;
+        rreq[addr].push(transaction);
+        rreq_queue.erase(it);
+      } else {
+        dbg_read_reject++;
       }
       break;
     }
@@ -143,13 +161,16 @@ void mm_ramulator2_t::tick(
         1,
         addr,
         id,
-        [this, addr](Ramulator::Request& req) {
-          write_complete(addr);
+        [](Ramulator::Request& req) {
         });
 
     if (accepted) {
-      wreq[addr].push(id);
+      dbg_write_sent++;
+      dbg_write_done++;
+      bresp.push(id);
       pending_wreq_queue.pop();
+    } else {
+      dbg_write_reject++;
     }
   }
 
@@ -159,6 +180,7 @@ void mm_ramulator2_t::tick(
 
   if (aw_fire) {
     store_addr = aw_addr;
+    store_base_addr = aw_addr;
     store_id = aw_id;
     store_count = aw_len + 1;
     store_size = 1 << aw_size;
@@ -172,8 +194,7 @@ void mm_ramulator2_t::tick(
 
     if (store_count == 0) {
       store_inflight = false;
-      uint64_t addr = store_addr;
-      pending_wreq_queue.push(std::make_pair(addr, store_id));
+      pending_wreq_queue.push(std::make_pair(store_base_addr, store_id));
       assert(w_last);
     }
   }
@@ -187,6 +208,25 @@ void mm_ramulator2_t::tick(
   ramulator2_frontend->tick();
   ramulator2_memorysystem->tick();
   cycle++;
+
+  if ((cycle % 1000000) == 0) {
+    fprintf(stderr,
+      "[ramulator2 dbg] cycle=%lu r_sent=%lu r_done=%lu r_rej=%lu w_sent=%lu w_done=%lu w_rej=%lu rreq_queue=%lu pending_wreq=%lu rresp=%lu bresp=%lu rreq=%lu wreq=%lu store_inflight=%d\n",
+      cycle,
+      dbg_read_sent,
+      dbg_read_done,
+      dbg_read_reject,
+      dbg_write_sent,
+      dbg_write_done,
+      dbg_write_reject,
+      rreq_queue.size(),
+      pending_wreq_queue.size(),
+      rresp.size(),
+      bresp.size(),
+      rreq.size(),
+      wreq.size(),
+      store_inflight ? 1 : 0);
+  }
 
   if (reset) {
     while (!bresp.empty()) bresp.pop();
