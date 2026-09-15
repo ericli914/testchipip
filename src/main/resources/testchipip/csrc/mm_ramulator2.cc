@@ -14,16 +14,8 @@
 
 //using namespace Ramulator;
 
-static uint64_t dbg_read_sent = 0;
-static uint64_t dbg_read_done = 0;
-static uint64_t dbg_write_sent = 0;
-static uint64_t dbg_write_done = 0;
-static uint64_t dbg_read_reject = 0;
-static uint64_t dbg_write_reject = 0;
-
 void mm_ramulator2_t::read_complete(uint64_t address)
 {
-  dbg_read_done++;
   assert(!rreq[address].empty());
   auto req = rreq[address].front();
   uint64_t start_addr = (req.addr / word_size) * word_size;
@@ -37,7 +29,6 @@ void mm_ramulator2_t::read_complete(uint64_t address)
 
 void mm_ramulator2_t::write_complete(uint64_t address)
 {
-  dbg_write_done++;
   assert(!wreq[address].empty());
   auto b_id = wreq[address].front();
   bresp.push(b_id);
@@ -141,12 +132,9 @@ void mm_ramulator2_t::tick(
           });
 
       if (accepted) {
-        dbg_read_sent++;
         read_id_busy[transaction.id] = true;
         rreq[addr].push(transaction);
         rreq_queue.erase(it);
-      } else {
-        dbg_read_reject++;
       }
       break;
     }
@@ -165,12 +153,8 @@ void mm_ramulator2_t::tick(
         });
 
     if (accepted) {
-      dbg_write_sent++;
-      dbg_write_done++;
       bresp.push(id);
       pending_wreq_queue.pop();
-    } else {
-      dbg_write_reject++;
     }
   }
 
@@ -208,25 +192,6 @@ void mm_ramulator2_t::tick(
   ramulator2_frontend->tick();
   ramulator2_memorysystem->tick();
   cycle++;
-
-  if ((cycle % 1000000) == 0) {
-    fprintf(stderr,
-      "[ramulator2 dbg] cycle=%lu r_sent=%lu r_done=%lu r_rej=%lu w_sent=%lu w_done=%lu w_rej=%lu rreq_queue=%lu pending_wreq=%lu rresp=%lu bresp=%lu rreq=%lu wreq=%lu store_inflight=%d\n",
-      cycle,
-      dbg_read_sent,
-      dbg_read_done,
-      dbg_read_reject,
-      dbg_write_sent,
-      dbg_write_done,
-      dbg_write_reject,
-      rreq_queue.size(),
-      pending_wreq_queue.size(),
-      rresp.size(),
-      bresp.size(),
-      rreq.size(),
-      wreq.size(),
-      store_inflight ? 1 : 0);
-  }
 
   if (reset) {
     while (!bresp.empty()) bresp.pop();
