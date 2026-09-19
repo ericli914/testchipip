@@ -13,11 +13,11 @@
 #include <string>
 #include <utility>
 
-#include "base/config.h"
-#include "base/factory.h"
-#include "base/request.h"
-#include "frontend/frontend.h"
-#include "memory_system/memory_system.h"
+#include "ramulator/base/config.h"
+#include "ramulator/base/factory.h"
+#include "ramulator/base/request.h"
+#include "ramulator/frontend/i_frontend.h"
+#include "ramulator/memory_system/i_memory_system.h"
 
 struct mm_ramulator2_req_t {
   uint64_t id;
@@ -88,6 +88,7 @@ class mm_ramulator2_t : public mm_t
  protected:
   Ramulator::IFrontEnd* ramulator2_frontend;
   Ramulator::IMemorySystem* ramulator2_memorysystem;
+  int ramulator2_tx_bytes;
   std::string config_path;
   uint64_t cycle;
 
